@@ -131,34 +131,28 @@
 
     <script>
         // --- 1. SPRÁVA STAVU APLIKACE (Data) ---
-        // Načtení dat z prohlížeče nebo vytvoření prázdného objektu
         let appState = JSON.parse(localStorage.getItem('czRegionsMapState')) || {};
         let geojsonLayer = null;
         let currentEditingLayer = null;
-        let lastUsedColor = '#3b82f6'; // Výchozí modrá
+        let lastUsedColor = '#3b82f6'; 
         let map;
 
-        // Uložení stavu do localStorage
         function saveState() {
             localStorage.setItem('czRegionsMapState', JSON.stringify(appState));
         }
 
         // --- 2. INICIALIZACE MAPY (Leaflet) ---
         function initMap(geojsonData) {
-            // Skrytí načítací obrazovky
             const loader = document.getElementById('loader');
             loader.style.opacity = '0';
             setTimeout(() => loader.style.display = 'none', 300);
 
-            // Nastavení mapy
             map = L.map('map', {
-                zoomControl: false // Přesuneme ovládání jinam
+                zoomControl: false 
             }).setView([49.8, 15.5], 7);
 
-            // Přidání ovládání přiblížení vpravo nahoře
             L.control.zoom({ position: 'topright' }).addTo(map);
 
-            // Přidání podkladové mapy (světlá, bez zbytečných textů)
             L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> | &copy; CartoDB',
                 subdomains: 'abcd',
@@ -166,84 +160,84 @@
                 minZoom: 6
             }).addTo(map);
 
-            // Vykreslení okresů z GeoJSON dat
             geojsonLayer = L.geoJSON(geojsonData, {
                 style: getLayerStyle,
                 onEachFeature: handleFeatureEvents
             }).addTo(map);
 
             // VYKRESLENÍ PERMANENTNÍCH TEXTŮ NA MAPU
-            // Projdeme všechny vrstvy (okresy), které se právě načetly do mapy
             geojsonLayer.eachLayer(function(layer) {
                 const name = getFeatureName(layer.feature);
-                
-                // Získání středu okresu pro umístění textu
                 const center = layer.getBounds().getCenter();
                 
-                // Přidání speciální "značky" (divIcon), která se chová jako statický text
                 L.marker(center, {
                     icon: L.divIcon({
                         className: 'district-label',
                         html: `<span>${name}</span>`,
                         iconSize: null,
-                        iconAnchor: [0, 0] // Centrování je vyřešeno v CSS přes transform
+                        iconAnchor: [0, 0] 
                     }),
-                    interactive: false // Klíčové: propustí kliknutí myší dolů na mapu
+                    interactive: false 
                 }).addTo(map);
             });
 
-            // Přizpůsobení pohledu mapy, aby bylo vidět celé Česko
             map.fitBounds(geojsonLayer.getBounds());
         }
 
         // --- 3. POMOCNÉ FUNKCE PRO PRÁCI S DATY ---
         
-        // Získání názvu okresu s agresivním vyhledáváním
+        // Funkce s extrémně odolným překladem jmen okresů (ignoring accents)
         function getFeatureName(feature) {
-            const p = feature.properties;
-            if (!p) return "Neznámý okres";
+            const p = feature.properties || {};
             
-            // 1. Zkusíme chytit unikátní úřední kód a přeložit ho
+            // 1. Překladový slovník všech 77 okresů ČR
             const districtMap = {
                 "CZ0100": "Praha", "CZ0201": "Benešov", "CZ0202": "Beroun", "CZ0203": "Kladno", "CZ0204": "Kolín", "CZ0205": "Kutná Hora", "CZ0206": "Mělník", "CZ0207": "Mladá Boleslav", "CZ0208": "Nymburk", "CZ0209": "Praha-východ", "CZ020A": "Praha-západ", "CZ020B": "Příbram", "CZ020C": "Rakovník", "CZ0311": "České Budějovice", "CZ0312": "Český Krumlov", "CZ0313": "Jindřichův Hradec", "CZ0314": "Písek", "CZ0315": "Prachatice", "CZ0316": "Strakonice", "CZ0317": "Tábor", "CZ0321": "Domažlice", "CZ0322": "Klatovy", "CZ0323": "Plzeň-město", "CZ0324": "Plzeň-jih", "CZ0325": "Plzeň-sever", "CZ0326": "Rokycany", "CZ0327": "Tachov", "CZ0411": "Cheb", "CZ0412": "Karlovy Vary", "CZ0413": "Sokolov", "CZ0421": "Děčín", "CZ0422": "Chomutov", "CZ0423": "Litoměřice", "CZ0424": "Louny", "CZ0425": "Most", "CZ0426": "Teplice", "CZ0427": "Ústí nad Labem", "CZ0511": "Česká Lípa", "CZ0512": "Jablonec nad Nisou", "CZ0513": "Liberec", "CZ0514": "Semily", "CZ0521": "Hradec Králové", "CZ0522": "Jičín", "CZ0523": "Náchod", "CZ0524": "Rychnov nad Kněžnou", "CZ0525": "Trutnov", "CZ0531": "Chrudim", "CZ0532": "Pardubice", "CZ0533": "Svitavy", "CZ0534": "Ústí nad Orlicí", "CZ0631": "Havlíčkův Brod", "CZ0632": "Jihlava", "CZ0633": "Pelhřimov", "CZ0634": "Třebíč", "CZ0635": "Žďár nad Sázavou", "CZ0641": "Blansko", "CZ0642": "Brno-město", "CZ0643": "Brno-venkov", "CZ0644": "Břeclav", "CZ0645": "Hodonín", "CZ0646": "Vyškov", "CZ0647": "Znojmo", "CZ0711": "Jeseník", "CZ0712": "Olomouc", "CZ0713": "Prostějov", "CZ0714": "Přerov", "CZ0715": "Šumperk", "CZ0721": "Kroměříž", "CZ0722": "Uherské Hradiště", "CZ0723": "Vsetín", "CZ0724": "Zlín", "CZ0801": "Bruntál", "CZ0802": "Frýdek-Místek", "CZ0803": "Karviná", "CZ0804": "Nový Jičín", "CZ0805": "Opava", "CZ0806": "Ostrava-město"
             };
-            const code = p.KOD_LAU1 || p.LAU1 || p.NUTS4 || p.KOD_OKRES || p.NUTS_ID || feature.id;
-            if (code && districtMap[code]) return districtMap[code];
+            const districtNames = Object.values(districtMap);
 
-            // 2. Očekávaná jména proměnných
-            let rawName = p.NAZ_LAU1 || p.NAZ_LN || p.NAZEV_LAU1 || p.NAME_2 || p.NAZEV || p.Nazev || p.Název || p.name || p.Name || p.NAME || p.NM || p.okres || p.Title;
+            // Trik pro "očištění" textů - zbaví se mezer, velikosti písmen i háčků a čárek
+            // "Zdar nad Sazavou" -> "zdarnadsazavou"
+            const normalize = (s) => s ? s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z]/g, "") : "";
             
-            // 3. Fallback: Prohledáme všechny proměnné a vezmeme první, která vypadá jako textový název (začíná velkým písmenem a neobsahuje jen kód)
-            if (!rawName) {
-                for (let key in p) {
-                    let val = p[key];
-                    if (typeof val === 'string' && val.length > 2 && /^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]/.test(val)) {
-                        // Přeskočíme ty, co vypadají jako NUTS kód (např. CZ0100)
-                        if (!/^CZ\d{4}$/.test(val)) {
-                            rawName = val;
-                            break;
-                        }
-                    }
+            // Vytvoříme si chytrý slovník: "zdarnadsazavou": "Žďár nad Sázavou"
+            const normalizedIndex = {};
+            districtNames.forEach(name => {
+                normalizedIndex[normalize(name)] = name;
+            });
+
+            // Zkusíme najít unikátní kód, kdyby tam byl (např. CZ0100)
+            for (let key in p) {
+                let val = String(p[key]).toUpperCase().trim();
+                if (districtMap[val]) return districtMap[val];
+            }
+
+            // Prohledáme všechny hodnoty v GeoJSON datech. Bez ohledu na to pod jakým názvem jsou (NAME_2, NAZEV atd.)
+            for (let key in p) {
+                let val = String(p[key]);
+                val = val.replace(/^(Okres|okres)\s+/i, ''); // Ufikneme slovo Okres
+                let normVal = normalize(val); // Uděláme z toho patvar bez háčků a čárek
+                
+                // Zkontrolujeme, zda tento patvar odpovídá reálnému českému okresu
+                if (normalizedIndex[normVal]) {
+                    return normalizedIndex[normVal]; // Vrátíme překrásný český název
                 }
             }
 
-            if (rawName) {
-                // Občas je jméno znečištěno slovem "Okres ", tak ho preventivně usekneme a ořízneme mezery
-                return rawName.replace(/^(Okres|okres)\s+/i, '').trim();
-            }
-
-            return "Neznámý okres";
+            // Extrémní záchrana: Pokud okres pořád chybí (data jsou absolutně nečitelná)
+            // Vygenerujeme mu fixní unikátní ID. Zabránime tím sdílení barvy u chybných dat!
+            let uniqueId = feature.id || p.ID_2 || p.OBJECTID || p.id || Math.random().toString(36).substring(7);
+            return "Okres ID: " + uniqueId;
         }
 
-        // Funkce pro styl polygonu (vrátí barvu podle stavu)
         function getLayerStyle(feature) {
             const name = getFeatureName(feature);
             const state = appState[name] || {};
             return {
-                fillColor: state.color || '#e5e7eb', // Naše barva nebo světle šedá výchozí
+                fillColor: state.color || '#e5e7eb',
                 weight: 1.5,
                 opacity: 1,
-                color: '#ffffff', // Bílé hranice mezi okresy
+                color: '#ffffff',
                 fillOpacity: 0.8
             };
         }
@@ -267,19 +261,16 @@
             const name = getFeatureName(feature);
             const state = appState[name] || {};
 
-            // Místo permanentního textu přidáme tooltip zobrazený při najetí myši
             updateTooltip(layer, name, state);
 
             layer.on({
                 mouseover: (e) => {
                     const l = e.target;
-                    // Oprava hoveru: Zvýrazníme POUZE ohraničení, neměníme výplň (aby to nepůsobilo jako automatické obarvování)
                     l.setStyle({ weight: 3, color: '#111827' }); 
                     if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
                         l.bringToFront();
                     }
                     
-                    // Aktualizace názvu a poznámky v UI panelu vlevo nahoře
                     const currentState = appState[name] || {};
                     let infoHtml = `<span class="font-bold text-gray-900">${name}</span>`;
                     if(currentState.note && currentState.note.trim() !== '') {
@@ -288,20 +279,16 @@
                     document.getElementById('hoverInfo').innerHTML = infoHtml;
                 },
                 mouseout: (e) => {
-                    // Resetování stylu zpět do normálu
                     geojsonLayer.resetStyle(e.target);
                     document.getElementById('hoverInfo').innerHTML = 'Najetím myši zobrazíte';
                 },
                 click: (e) => {
-                    // Otevření editoru pro daný okres
                     openEditor(feature, e.target);
                 }
             });
         }
 
         // --- 5. LOGIKA EDITORU (Modální okno) ---
-        
-        // Generování tlačítek rychlé volby barev
         const presets = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6', '#6366f1', '#a855f7', '#ec4899'];
         const presetContainer = document.getElementById('presetColors');
         presets.forEach(color => {
@@ -318,7 +305,6 @@
             const state = appState[name] || {};
             
             document.getElementById('editorTitle').innerText = name;
-            // Nastav existující barvu, nebo poslední použitou (usnadňuje barvení skupin)
             document.getElementById('colorPicker').value = state.color || lastUsedColor;
             document.getElementById('noteInput').value = state.note || '';
             
@@ -338,19 +324,14 @@
             const color = document.getElementById('colorPicker').value;
             const note = document.getElementById('noteInput').value;
             
-            lastUsedColor = color; // Pamatujeme si barvu pro další kliknutí
+            lastUsedColor = color; 
             
-            // Uložení
             appState[name] = { color, note };
             saveState();
             
-            // Okamžitá aktualizace mapy (resetStyle správně načte novou barvu z appState)
             geojsonLayer.resetStyle(currentEditingLayer);
-            
-            // Aktualizace textu v tooltipu po najetí myší
             updateTooltip(currentEditingLayer, name, appState[name]);
             
-            // Aktualizace bočního panelu, pokud na okresu zrovna stojíme myší
             let infoHtml = `<span class="font-bold text-gray-900">${name}</span>`;
             if(note.trim() !== '') infoHtml += `<br><span class="text-sm text-indigo-600 font-bold truncate block mt-1">${note}</span>`;
             document.getElementById('hoverInfo').innerHTML = infoHtml;
@@ -358,7 +339,6 @@
             closeEditor();
         }
 
-        // Klávesové zkratky pro modální okno
         document.addEventListener('keydown', (e) => {
             if (!document.getElementById('editorModal').classList.contains('hidden')) {
                 if (e.key === 'Escape') closeEditor();
@@ -387,7 +367,7 @@
                     const importedState = JSON.parse(e.target.result);
                     appState = importedState;
                     saveState();
-                    location.reload(); // Provedeme znovunačtení stránky pro propsání dat
+                    location.reload(); 
                 } catch (err) {
                     alert('Nepodařilo se načíst soubor. Zkontrolujte, že jde o platný formát z této aplikace.');
                 }
@@ -403,10 +383,9 @@
         }
 
         // --- 7. NAČTENÍ DAT A SPUŠTĚNÍ ---
-        // Seznam URL zdrojů (obsahují fallback pro jistotu, kdyby nějaký zdroj měl výpadek)
         const geojsonUrls = [
-            'https://raw.githubusercontent.com/siwekm/czech-geojson/master/okresy.json',
-            'https://gist.githubusercontent.com/carmoreira/deb0b3a5c101d1b2a47600ab225be262/raw/cb139cf24eb933b4694d07fd8bd0e979cca54d28/distictsCzechiaLow.json'
+            'https://gist.githubusercontent.com/carmoreira/deb0b3a5c101d1b2a47600ab225be262/raw/cb139cf24eb933b4694d07fd8bd0e979cca54d28/distictsCzechiaLow.json',
+            'https://raw.githubusercontent.com/siwekm/czech-geojson/master/okresy.json'
         ];
 
         async function loadMapData() {
@@ -416,13 +395,12 @@
                     if (!response.ok) continue;
                     const data = await response.json();
                     initMap(data);
-                    return; // Data načtena, ukončujeme smyčku
+                    return; 
                 } catch (e) {
                     console.warn(`Nepodařilo se načíst z ${url}, zkouším další zdroj...`);
                 }
             }
             
-            // Pokud selžou všechny pokusy
             document.getElementById('loader').innerHTML = `
                 <div class="text-red-600 text-center bg-red-50 p-6 rounded-lg">
                     <p class="text-xl font-bold mb-2">Chyba při načítání dat mapy</p>
@@ -432,7 +410,6 @@
             `;
         }
 
-        // Spuštění
         loadMapData();
 
     </script>

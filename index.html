@@ -9,11 +9,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Leaflet CSS a JS pro zobrazení mapy -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
 
-    <!-- html2canvas pro generování screenshotů mapy -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- html-to-image pro spolehlivější generování screenshotů mapy (lépe zvládá SVG a transformace) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
     
     <style>
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; }
@@ -207,7 +207,8 @@
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> | &copy; CartoDB',
                 subdomains: 'abcd',
                 maxZoom: 12,
-                minZoom: 6
+                minZoom: 6,
+                crossOrigin: true // OPRAVA: Povolení CORS pro bezpečný export do obrázku pomocí html-to-image
             }).addTo(map);
 
             geojsonLayer = L.geoJSON(geojsonData, {
@@ -491,17 +492,19 @@
             panel.classList.add('hidden');
             showBtn.classList.add('hidden');
 
+            // Krátká pauza, aby prohlížeč stihl aplikovat skrytí panelů před focením
+            await new Promise(resolve => setTimeout(resolve, 150));
+
             try {
-                // Vygenerování screenshotu s povolením křížových odkazů pro mapové podklady
-                const canvas = await html2canvas(document.body, {
-                    useCORS: true,
-                    allowTaint: false,
+                // Vygenerování screenshotu pomocí knihovny html-to-image (perfektně zvládá Leaflet a SVG)
+                const dataUrl = await htmlToImage.toPng(document.getElementById('map'), {
+                    pixelRatio: 2, // Zvýší ostrost textů na exportovaném obrázku
                     backgroundColor: '#f3f4f6'
                 });
                 
                 const link = document.createElement('a');
                 link.download = 'mapa_regionu_cr.png';
-                link.href = canvas.toDataURL('image/png');
+                link.href = dataUrl;
                 link.click();
             } catch (error) {
                 console.error('Chyba při exportu:', error);

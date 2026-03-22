@@ -73,7 +73,7 @@
     <!-- Plovoucí UI Panel (vlevo nahoře) -->
     <div id="uiPanel" class="absolute top-4 left-4 bg-white/95 backdrop-blur-sm p-5 rounded-xl shadow-lg border border-gray-200 max-w-sm">
         <h1 class="text-xl font-extrabold mb-1 text-gray-900">Správa regionů ČR</h1>
-        <p class="text-sm text-gray-600 mb-4">Klikněte na libovolný okres pro přiřazení barvy a vložení vlastní poznámky/čísla.</p>
+        <p class="text-sm text-gray-600 mb-4">Klikněte na libovolný okres pro přiřazení barvy a vložení poznámek.</p>
         
         <!-- Ukazatel okresu pod myší -->
         <div class="mb-5 p-3 bg-blue-50 rounded-lg border border-blue-100 text-center min-h-[5rem] flex flex-col justify-center">
@@ -103,7 +103,7 @@
     <div id="editorModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center transition-opacity">
         <div class="bg-white p-7 rounded-2xl shadow-2xl w-[26rem] transform transition-transform">
             <h2 class="text-2xl font-extrabold mb-1 text-gray-900" id="editorTitle">Detail a úprava okresu</h2>
-            <p class="text-sm text-gray-500 mb-6">Přiřaďte barvu regionu a volitelný popisek.</p>
+            <p class="text-sm text-gray-500 mb-6">Přiřaďte barvu regionu a vlastní poznámky.</p>
             
             <div class="mb-5">
                 <label class="block text-sm font-semibold text-gray-700 mb-2">Předvolené barvy regionů</label>
@@ -118,8 +118,8 @@
             </div>
             
             <div class="mb-6">
-                <label class="block text-sm font-semibold text-gray-700 mb-2">Vlastní text / Číslo</label>
-                <input type="text" id="noteInput" placeholder="Např. Region Východ, 01, atd." class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow text-gray-800">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Poznámky (každá na nový řádek)</label>
+                <textarea id="noteInput" rows="4" placeholder="Např:&#10;Region Východ&#10;Pobočka 01&#10;Vedoucí: Jan Novák" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow text-gray-800 resize-y"></textarea>
             </div>
             
             <div class="flex justify-end gap-3 mt-8">
@@ -165,10 +165,28 @@
                 onEachFeature: handleFeatureEvents
             }).addTo(map);
 
+            // Manuální korekce pozic popisků pro okresy ve tvaru "podkovy" (obklopují jiný okres), 
+            // u kterých matematický střed vychází přesně do díry uprostřed.
+            const customLabelPositions = {
+                "Praha-východ": [50.05, 14.75], // Posunuto fyzicky na východ od Prahy
+                "Praha-západ": [49.93, 14.30],  // Posunuto fyzicky na jihozápad
+                "Brno-venkov": [49.08, 16.55]   // Pro jistotu i Brno-venkov (stejný případ)
+            };
+
             // VYKRESLENÍ PERMANENTNÍCH TEXTŮ NA MAPU
             geojsonLayer.eachLayer(function(layer) {
                 const name = getFeatureName(layer.feature);
-                const center = layer.getBounds().getCenter();
+                
+                // Určení středu s využitím manuálních korekcí pro problémové okresy
+                let center;
+                if (customLabelPositions[name]) {
+                    center = L.latLng(customLabelPositions[name]);
+                } else if (typeof layer.getCenter === 'function') {
+                    // getCenter() mapové knihovny je o něco chytřejší pro nepravidelné polygony
+                    center = layer.getCenter();
+                } else {
+                    center = layer.getBounds().getCenter();
+                }
                 
                 L.marker(center, {
                     icon: L.divIcon({
@@ -197,35 +215,42 @@
             const districtNames = Object.values(districtMap);
 
             // Trik pro "očištění" textů - zbaví se mezer, velikosti písmen i háčků a čárek
-            // "Zdar nad Sazavou" -> "zdarnadsazavou"
             const normalize = (s) => s ? s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z]/g, "") : "";
             
-            // Vytvoříme si chytrý slovník: "zdarnadsazavou": "Žďár nad Sázavou"
             const normalizedIndex = {};
             districtNames.forEach(name => {
                 normalizedIndex[normalize(name)] = name;
             });
+            
+            // Speciální výjimky pro zkráceniny, které by normalizace nevyřešila
+            normalizedIndex["zdarnsazavou"] = "Žďár nad Sázavou";
+            normalizedIndex["zdarns"] = "Žďár nad Sázavou";
+            normalizedIndex["hlavnimestopraha"] = "Praha";
+            normalizedIndex["praha"] = "Praha";
 
-            // Zkusíme najít unikátní kód, kdyby tam byl (např. CZ0100)
+            // Zkusíme najít unikátní kód, kdyby tam byl
             for (let key in p) {
                 let val = String(p[key]).toUpperCase().trim();
                 if (districtMap[val]) return districtMap[val];
             }
 
-            // Prohledáme všechny hodnoty v GeoJSON datech. Bez ohledu na to pod jakým názvem jsou (NAME_2, NAZEV atd.)
+            // Prohledáme všechny hodnoty v GeoJSON datech
             for (let key in p) {
                 let val = String(p[key]);
                 val = val.replace(/^(Okres|okres)\s+/i, ''); // Ufikneme slovo Okres
-                let normVal = normalize(val); // Uděláme z toho patvar bez háčků a čárek
+                let normVal = normalize(val); 
                 
-                // Zkontrolujeme, zda tento patvar odpovídá reálnému českému okresu
                 if (normalizedIndex[normVal]) {
-                    return normalizedIndex[normVal]; // Vrátíme překrásný český název
+                    return normalizedIndex[normVal]; 
+                }
+                
+                // Silný fallback speciálně pro Žďár nad Sázavou, pokud je napsán velmi netradičně
+                if (val.includes("Sázavou") || val.includes("Sazavou") || (val.includes("Žďár") && val.includes("S"))) {
+                    return "Žďár nad Sázavou";
                 }
             }
 
-            // Extrémní záchrana: Pokud okres pořád chybí (data jsou absolutně nečitelná)
-            // Vygenerujeme mu fixní unikátní ID. Zabránime tím sdílení barvy u chybných dat!
+            // Extrémní záchrana pro neznámý formát
             let uniqueId = feature.id || p.ID_2 || p.OBJECTID || p.id || Math.random().toString(36).substring(7);
             return "Okres ID: " + uniqueId;
         }
@@ -245,8 +270,17 @@
         // --- 4. INTERAKTIVITA MAPY (Hover, Kliknutí, Tooltipy) ---
         function updateTooltip(layer, name, state) {
             let tooltipHtml = `<div class="text-center"><strong class="block text-gray-900">${name}</strong>`;
+            
+            // Pokud existují poznámky, rozdělíme je podle nových řádků na jednotlivé štítky
             if (state.note && state.note.trim() !== '') {
-                tooltipHtml += `<span class="inline-block mt-1 px-2 py-0.5 bg-indigo-100 text-indigo-800 text-xs font-bold rounded border border-indigo-200 shadow-sm">${state.note}</span>`;
+                const notes = state.note.split('\n').filter(n => n.trim() !== '');
+                if (notes.length > 0) {
+                    tooltipHtml += `<div class="mt-1 flex flex-col gap-1 items-center">`;
+                    notes.forEach(note => {
+                        tooltipHtml += `<span class="inline-block px-2 py-0.5 bg-indigo-100 text-indigo-800 text-xs font-bold rounded border border-indigo-200 shadow-sm">${note.trim()}</span>`;
+                    });
+                    tooltipHtml += `</div>`;
+                }
             }
             tooltipHtml += `</div>`;
             
@@ -273,8 +307,17 @@
                     
                     const currentState = appState[name] || {};
                     let infoHtml = `<span class="font-bold text-gray-900">${name}</span>`;
+                    
+                    // Zobrazení více poznámek v levém panelu
                     if(currentState.note && currentState.note.trim() !== '') {
-                        infoHtml += `<br><span class="text-sm text-indigo-600 font-bold truncate block mt-1">${currentState.note}</span>`;
+                        const notes = currentState.note.split('\n').filter(n => n.trim() !== '');
+                        if (notes.length > 0) {
+                            infoHtml += `<div class="mt-2 flex flex-col gap-1">`;
+                            notes.forEach(note => {
+                                infoHtml += `<span class="text-xs text-indigo-700 font-bold bg-indigo-50 border border-indigo-100 px-2 py-1 rounded shadow-sm">${note.trim()}</span>`;
+                            });
+                            infoHtml += `</div>`;
+                        }
                     }
                     document.getElementById('hoverInfo').innerHTML = infoHtml;
                 },
@@ -333,7 +376,16 @@
             updateTooltip(currentEditingLayer, name, appState[name]);
             
             let infoHtml = `<span class="font-bold text-gray-900">${name}</span>`;
-            if(note.trim() !== '') infoHtml += `<br><span class="text-sm text-indigo-600 font-bold truncate block mt-1">${note}</span>`;
+            if(note.trim() !== '') {
+                const notes = note.split('\n').filter(n => n.trim() !== '');
+                if (notes.length > 0) {
+                    infoHtml += `<div class="mt-2 flex flex-col gap-1">`;
+                    notes.forEach(n => {
+                        infoHtml += `<span class="text-xs text-indigo-700 font-bold bg-indigo-50 border border-indigo-100 px-2 py-1 rounded shadow-sm">${n.trim()}</span>`;
+                    });
+                    infoHtml += `</div>`;
+                }
+            }
             document.getElementById('hoverInfo').innerHTML = infoHtml;
             
             closeEditor();
@@ -342,7 +394,9 @@
         document.addEventListener('keydown', (e) => {
             if (!document.getElementById('editorModal').classList.contains('hidden')) {
                 if (e.key === 'Escape') closeEditor();
-                if (e.key === 'Enter') saveEditor();
+                // Upraveno chování klávesy Enter - ve velkém textovém poli chceme dělat nové řádky,
+                // uložení přes Enter tak proběhne jen pokud uživatel drží i Ctrl.
+                if (e.key === 'Enter' && e.ctrlKey) saveEditor();
             }
         });
 
